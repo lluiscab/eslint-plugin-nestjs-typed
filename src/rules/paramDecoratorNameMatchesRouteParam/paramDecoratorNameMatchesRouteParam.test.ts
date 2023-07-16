@@ -96,6 +96,7 @@ ruleTester.run("param-decorator-name-matches-route-param", rule, {
             }
             `,
         },
+
         {
             code: `
             @ApiTags("Custom Bot")
@@ -243,6 +244,23 @@ ruleTester.run("param-decorator-name-matches-route-param", rule, {
                 async getMajorMedicalPlanFilters(
                   @Param('employerId', new ParseUUIDPipe()) employerId: string){}
             }`,
+        },
+        {
+            // objects are ignored by rule
+            code: `
+            enum AppRoutes {
+                Root = 'app',
+                VerifyParams = ':id',
+              }
+              
+              @Controller(AppRoutes.Root)
+              export class AppController {
+              
+                @Post(AppRoutes.VerifyParams)
+                verifyParams(@Param('id', ParseUUIDPipe) id: string): VerifyParamsResponseDto {
+                  return new VerifyParamsResponseDto({ token: id });
+                }
+              }`,
         },
         {
             // template strings are ignored by rule

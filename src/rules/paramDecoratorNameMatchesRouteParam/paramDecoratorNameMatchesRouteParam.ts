@@ -66,6 +66,28 @@ export const hasPathPartsAnyRegexParams = (
     });
 };
 
+const decoratorArgumentIsUsable = (decorator: TSESTree.Decorator): boolean => {
+    // is the decorator argument usable?
+    console.log("decorator", decorator);
+
+    const expression = decorator.expression as TSESTree.CallExpression;
+    const hasUsableDecoratorExpressionArgument =
+        expression?.arguments?.length > 0 &&
+        (expression?.arguments[0].type == TSESTree.AST_NODE_TYPES.Literal ||
+            expression?.arguments[0].type ==
+                TSESTree.AST_NODE_TYPES.ArrayExpression ||
+            expression?.arguments[0].type ==
+                TSESTree.AST_NODE_TYPES.ObjectExpression);
+    if (!hasUsableDecoratorExpressionArgument) {
+        console.error(
+            "expression",
+            hasUsableDecoratorExpressionArgument,
+            expression.arguments?.[0]?.type
+        );
+        return false;
+    }
+    return true;
+};
 /**
  * Checks if there is a matching path part for the paramName
  * @param paramName
@@ -97,11 +119,11 @@ export const shouldTrigger = (decorator: TSESTree.Decorator): ResultModel => {
             paramNameNotMatchedInPath: false,
         };
     }
+
+    const expression = decorator.expression as TSESTree.CallExpression;
     // grab the param name
-    const paramName = (
-        (decorator.expression as TSESTree.CallExpression)
-            ?.arguments[0] as TSESTree.Literal
-    )?.value as string;
+    const paramName = (expression?.arguments[0] as TSESTree.Literal)
+        ?.value as string;
 
     // if there's no param name get out of here
     if (!paramName || paramName === "") {
@@ -120,7 +142,7 @@ export const shouldTrigger = (decorator: TSESTree.Decorator): ResultModel => {
 
     let pathPartsToCheck: string[] = [];
 
-    // grab any controller path parts
+    // grab the controller decorator
     // eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style
     const controllerDecorator = (
         decorator.parent?.parent?.parent?.parent
@@ -134,14 +156,9 @@ export const shouldTrigger = (decorator: TSESTree.Decorator): ResultModel => {
         );
     }) as TSESTree.Decorator;
 
-    pathPartsToCheck = pathPartsToCheck.concat(
-        parsePathParts(controllerDecorator)
-    );
-
-    // grab any api method path parts from method decorator
+    // grab any method decorator
     const methodDefinition = decorator.parent?.parent
         ?.parent as TSESTree.MethodDefinition;
-
     // eslint-disable-next-line @typescript-eslint/non-nullable-type-assertion-style
     const methodDecorator = methodDefinition?.decorators?.find((d) => {
         return nestRequestMethodDecoratorNames.has(
@@ -152,6 +169,25 @@ export const shouldTrigger = (decorator: TSESTree.Decorator): ResultModel => {
         );
     }) as TSESTree.Decorator;
 
+    // if there is not a usable controller or method decorator then we can't check
+    if (
+        (methodDecorator || controllerDecorator) && // if there's no controller or method decorator there is an error and we should continue to parse
+        ((methodDecorator && !decoratorArgumentIsUsable(methodDecorator)) ||
+            (controllerDecorator &&
+                !decoratorArgumentIsUsable(controllerDecorator)))
+    ) {
+        return {
+            hasColonInName: false,
+            paramNameNotMatchedInPath: false,
+        };
+    }
+    // OK - there is something to test!!
+
+    // grab any controller path parts
+    pathPartsToCheck = pathPartsToCheck.concat(
+        parsePathParts(controllerDecorator)
+    );
+    // grab any method path parts
     pathPartsToCheck = pathPartsToCheck.concat(parsePathParts(methodDecorator));
     const shouldIgnoreThisSetOfRoutes =
         // is a template literal argument
